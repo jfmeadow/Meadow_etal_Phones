@@ -1,32 +1,43 @@
-`r opts_chunk$set(cache=FALSE)`
+`r opts_chunk$set(cache=FALSE, tidy=FALSE, comment='')`
 
 
-# Phone Microbiome Pilot Project
+# Phone Microbiome/Biosensor Project
+
 #### James Meadow (jfmeadow at gmail dot com)
+
 -------------------------
+
+_This analysis document accompanies a manuscript that reports analysis of microbial communities sampled from smartphone touchscreens, as well as the index fingers and thumbs of their owners. This was a project that was conducted as an educational workshop meant to explore innovative ways to monitor health. The manuscript is currently in review. This document was produced with the [`knitr` package](http://yihui.name/knitr/) in R, and all source code can be found on GitHub: [https://github.com/jfmeadow/Meadow_etal_Phones](https://github.com/jfmeadow/Meadow_etal_Phones)_
+
+-------------------------
+
 ### Getting data into shape
 
-The first step is to load two necessary community ecology packages, 
-and then load a few custom functions that will be used later. 
+The first step is to set a random seed (so results are locked in with those reported in the manuscript) and load some necessary R packages and functions. 
 
 
 ```{r loadFunctions}
+set.seed(42)
+options(scipen=7)
 library(vegan)
 library(labdsv)
-# library(dplyr)
+library(miscTools)
 library(xtable)
+library(boot)
 
-# setwd('~/Dropbox/rwjf/Meadow_etal_Phones/')  # not necessary for knitr - automatically in dir. 
+# These options just for debugging - knitr is automatically in dir. 
+# setwd('~/Dropbox/rwjf/Meadow_etal_Phones/')  
 # load('phones.RData')
+
 source('functions.R')
 ```
 
-The OTU table is brought in with a custom function `QiimeIn` that reads a classic OTU table and then splits it into a few useful pieces in a big list. The Bioconductor package `phyloseq` actually has more efficient ways to do this with the `.biom` format, but my function will work here - the outcome is identical in this 
-case. 
+The OTU table is brought in with a custom function `QiimeIn` that reads a classic OTU table and then splits it into a few useful pieces in a big list. The Bioconductor package `phyloseq` actually has more efficient ways to do this with the `.biom` format, but my modest function will work here - the outcome is practically the same in this case. 
 
 ```{r loadOTUtable}
 rw.list <- QiimeIn(file='phones_otu_table.txt')
-rw.map <- read.delim('phones_map.txt', head=TRUE, row.names=1)  # removed comment character from first line. 
+# removed comment character from first line so R takes it. 
+rw.map <- read.delim('phones_map.txt', head=TRUE, row.names=1)  
 rw.big <- rw.list$Table
 rw.taxo <- rw.list$Taxa
 rm(rw.list)
@@ -37,12 +48,13 @@ We found a total of `r sum(rw.big)` sequences, consisting of `r nrow(rw.big)` sa
 Then line up with the order of the mapping file. 
 
 ```{r curateTable}
-# OTU table
 row.names(rw.big) <- gsub('X', '', row.names(rw.big))
 rw.big <- rw.big[row.names(rw.map), ]
 ```
 
 -----------
+
+### Configure OTU table
 
 Before anything else, we should remove any OTUs from lab controls that showed up in experiment samples. Cell phone surfaces hold really low biomass, so amplification contamination is inevitable. Best to just remove them all. Save the list of contaminant OTUs to shore up the taxonomy table below. 
 
@@ -60,6 +72,7 @@ rm(rw.big, cont.table, cont)
 Next:
 
 * Plant sequences are always in 16S datasets, so one way to remove them is to call them by name "_Streptophyta_." These get removed.
+* Do the same for mitochondrial sequences. 
 * Remove lab contaminants identified above.  
 * Remove OTUs that are represented by only 1 or 2 sequences - these lend little to community analysis and slow down the whole works. 
 * The last step is to rarefy all samples to an even sampling depth, in this case 2500 sequences per sample.
@@ -69,14 +82,15 @@ Next:
 ```{r removePlantsSingletons}
 rw.taxo <- rw.taxo[-cont.otus, ]
 streptophyta <- grep('Streptophyta', rw.taxo$taxa.names)
-rw.table.tmp <- rw.table.nocontrol[, -c(streptophyta)]
+mitochondria <- grep('mitochondria', rw.taxo$taxa.names)
+rw.table.tmp <- rw.table.nocontrol[, -c(streptophyta, mitochondria)]
 sort(rowSums(rw.table.tmp))
 rw.table.tmp <- rw.table.tmp[, -c(which(colSums(rw.table.tmp) < 3))]
 ```
 
 ```{r rrarefy}
 rw.25 <- rrarefy(rw.table.tmp, 2500)
-rm(streptophyta, rw.table.tmp, cont.otus)
+rm(streptophyta, mitochondria, rw.table.tmp, cont.otus, rw.table.nocontrol)
 ```
 
 
@@ -88,9 +102,14 @@ rw.taxo.25 <- rw.taxo[colnames(rw.25), ]
 rm(rw.taxo)
 ```
 
-So we're left with `r sum(rw.25)` sequences in `r nrow(rw.25)` samples and `r ncol(rw.25)` OTUs. 
+So we're left with `r sum(rw.25)` sequences 
+in `r nrow(rw.25)` samples 
+and `r ncol(rw.25[, colSums(rw.25)>0])` OTUs. 
 
 ------------------
+
+### Configure sample metadata
+
 
 The mapping file (metadata for each sample) was loaded in during the first step. 
 First, we line up samples with the OTU table row names since it is now in shape. Then there is lots of baggage that comes along with mapping files. Factor variables must be retrained, and then we add three colors that will be used in analysis. 
@@ -98,8 +117,10 @@ First, we line up samples with the OTU table row names since it is now in shape.
 ```{r tweakMap}
 
 # mapping file
-map <- rw.map[row.names(rw.25), ]
-rm(rw.map)
+map <- rw.map[row.names(rw.25), ]  # reorder to match 
+rm(rw.map)  # remove old one
+
+# then reorder a few factors for convenience. 
 map$individ <- factor(map$individ, levels=c(as.character(levels(map$individ)[1:17])))
 map$location <- factor(map$location, levels=c('index', 'thumb', 'phone'))
 map$type <- factor(map$type, levels=c('c', 'o', 'p'))
@@ -107,9 +128,30 @@ map$dominance <- factor(map$dominance, levels=c('r', 'l'))
 map$gender <- factor(map$gender, levels=c('f', 'm'))
 map$wash <- factor(map$wash, levels=c('y', 'n'))
 map <- map[, c(3, 5, 7, 8, 9)]
+
+# create colors for plotting ease
 map$bg <- 'gray30'  # phones
 map$bg[map$location == 'index'] <- 'cornflowerblue'
 map$bg[map$location == 'thumb'] <- 'darkorange'
+```
+
+And create a few more variables. 
+
+```{r createIndexVariables}
+map$loc.gen <- paste(map$location, map$gender, sep='.')
+map$location2 <- as.character(map$location)
+map$location2[map$location2 != 'phone'] <- 'finger'
+map$location2 <- factor(map$location2)
+map$loc.gen2 <- factor(paste(map$location2, map$gender, sep='.'), 
+                       levels=c('finger.f', 'phone.f', 'finger.m', 'phone.m'))
+
+index <- which(map$location == 'index')
+thumb <- which(map$location == 'thumb')
+finger <- which(map$location2 == 'finger')
+
+m <- which(map$gender == 'm')
+f <- which(map$gender == 'f')
+p <- which(map$location == 'phone')
 ```
 
 
@@ -157,7 +199,7 @@ Looks good. Then we want to know about the most abundant phyla, to be used for a
 
 ```{r makePhylum}
 ph <- aggregate(taxo$abundance, by=list(taxo$phylum), FUN=sum)
-ph[rev(order(ph$x)), ] #  cut off at unidentified.
+ph[rev(order(ph$x))[1:10], ] #  cut off at unidentified.
 ```
 
 We can use the top 5 and group all others. So a new data frame is created to hold the mean abundances grouped by phylum and by location type (index, thumb, or phone). This code is not pretty but it works.
@@ -175,7 +217,8 @@ ph.mean <- data.frame(
 	Fusobacteria = aggregate(rowSums(rw.25[, which(taxo$phylum == 'Fusobacteria')]), 
     by=list(map$location), FUN=mean),
 	Other = aggregate(rowSums(rw.25[, -c(which(taxo$phylum %in% 
-		c('Firmicutes', 'Proteobacteria', 'Actinobacteria', 'Fusobacteria', 'Bacteroidetes')))]), 
+		c('Firmicutes', 'Proteobacteria', 'Actinobacteria', 
+      'Fusobacteria', 'Bacteroidetes')))]), 
 		by=list(map$location), FUN=mean))
 
 ph.mean <- ph.mean[, c(2, 4, 6, 8, 10, 12)]
@@ -202,12 +245,12 @@ ph.se <- data.frame(
   Fusobacteria = aggregate(rowSums(rw.25.rel[, which(taxo$phylum == 'Fusobacteria')]), 
     by=list(map$location), FUN=se),
 	Other = aggregate(rowSums(rw.25.rel[, -c(which(taxo$phylum %in% 
-		c('Firmicutes', 'Proteobacteria', 'Actinobacteria', 'Fusobacteria', 'Bacteroidetes')))]), 
+		c('Firmicutes', 'Proteobacteria', 'Actinobacteria', 
+      'Fusobacteria', 'Bacteroidetes')))]), 
 		by=list(map$location), FUN=se))
 ph.se <- ph.se[, c(2, 4, 6, 8, 10, 12)]
 row.names(ph.se) <- c('index', 'thumb', 'phone')
 names(ph.se) <- gsub('.x', '', names(ph.se))
-rm(rw.25.rel)
 ```
 
 And then turn them upside down for nicer plotting. 
@@ -219,7 +262,8 @@ ph.se <- ph.se[, c(6:1)]
 
 Now we have data in place to make a barplot by hand: 
 
-```{r phylumBarplot,dpi=100,fig.height=6,fig.width=6}
+```{r phylumBarplot,dpi=100,fig.height=4.5,fig.width=4.5}
+# pdf('phylumBarplot.pdf', height=6, width=6, useDingbats=FALSE)
 par(mar=c(5,7,2,2), las=1, font.lab=1)
 mids <- barplot(as.matrix(ph.mean), beside=TRUE, horiz=TRUE, las=1, xlim=c(0,.6), 
   border='white', xlab='', axisnames=FALSE, 
@@ -233,16 +277,224 @@ legend(.40, 7, legend=c('phone', 'thumb', 'index'), pch=15, pt.cex=2,
 	col=c('gray30', 'darkorange', 'cornflowerblue'), bty='n', y.intersp=.82)
 mtext('Percent of Each Sample', side=1, line=2.4, font=2)
 mtext(names(ph.mean), side=2, at=c(mids[2, ]), line=.2, font=3)
-# mtext('Phylum-level abundance', col='gray30')
+# dev.off()
+```
+
+
+Now try to hone in on the Firmicutes since that is the most prominent difference: 
+
+_Note - One OTU (Paenibacillus) appears to be an outlier with a wacky distribution, so it is left out. Although `set.seed` is used at the top, it might show up in the top 10 again if it is all run again._ 
+
+```{r}
+#Firmicutes = aggregate(rowSums(rw.25.rel[, which(taxo$phylum == 'Firmicutes')]), 
+#    by=list(map$location), FUN=se),
+fir.table <- rw.25.rel[, which(taxo$phylum == 'Firmicutes')]
+fir.taxo <- taxo[taxo$phylum == 'Firmicutes', ]
+identical(colnames(fir.table), row.names(fir.taxo))
+
+# leave out outlier
+fir.table.10 <- fir.table[, names(rev(sort(colSums(fir.table)))[c(1:3, 5:11)])]  
+fir.taxo.10 <- fir.taxo[colnames(fir.table.10), ]
+dim(fir.table.10)
+sum(colMeans(fir.table.10))
+```
+
+What percentage of observations are represented here? `r sum(colMeans(fir.table.10))*100`%
+
+
+Look at each of the top 10 to see if there is more to investigate.
+
+_Note - This is not evaluated for the `knitr` document. Only during data exploration._ 
+
+```{r, eval=FALSE}
+for(i in 1:ncol(fir.table.10)) {
+  boxplot(fir.table.10[, i] ~ map$loc.gen2)
+  mtext(fir.taxo.10$genus[i])
+  readline('press enter')
+  }
+```
+
+
+Yes. Very much so. There are some really interesting gender differences in the most abundant taxa. This will make a nice addition to the barplot. 
+
+_Note, again, that one of the original top 10 shows an ugly distribution = all driven by one person with A LOT of Paenibacillus on his fingers. So that one was removed in the code above for clarity - now we're looking at `c(1:4, 6:11)` to make an even 10. For further investigation, that OTU was ID\# 29684. Oddly, it was elevated on both fingers, but didn't show up on his phone. It was nearly absent from all other samples._ 
+
+Now create data frames to hold plotting info.
+
+```{r}
+fir.mean <- data.frame(matrix(NA, 4, 10))
+row.names(fir.mean) <- levels(map$loc.gen2)
+names(fir.mean) <- colnames(fir.table.10)
+
+fir.se <- data.frame(matrix(NA, 4, 10))
+row.names(fir.se) <- levels(map$loc.gen2)
+names(fir.se) <- colnames(fir.table.10)
+
+test <- aggregate(fir.table.10[, i], by=list(map$loc.gen2), mean)
+
+if(identical(row.names(fir.mean), as.character(test$Group.1))) {
+  for (i in 1:10) {
+    fir.mean[, i] <- aggregate(fir.table.10[, i], by=list(map$loc.gen2), mean)$x
+    fir.se[, i] <- aggregate(fir.table.10[, i], by=list(map$loc.gen2), se)$x
+    }
+} else {print("Didn't work - rows weren't lined up!")}
+
+fir.mean <- fir.mean[4:1, 10:1] * 100
+fir.se <- fir.se[4:1, 10:1] * 100
 ```
 
 
 
-### Barplots - how are phones related to people?
+And do the same for Proteobacteria.
 
-Next, we want to know how communities break out between people and their phones. To do this, we make a distance matrix. In our case, we want to be able to easily explain so we use Jaccard similarity ($latex S_{jaccard} = \frac{shared~richness}{combined~richness}$) so that we can interpret in easy language. Later, we'll also want a _similarity_ rather than a _distance_, so we'll invert the distance R gives by default ($latex S_{jaccard} = 1-D_{jaccard}$). This way things with more in common have higher values, and that is easier to visualize.
 
-```{r jaccard}
+```{r}
+pro.table <- rw.25.rel[, which(taxo$phylum == 'Proteobacteria')]
+pro.taxo <- taxo[taxo$phylum == 'Proteobacteria', ]
+identical(colnames(pro.table), row.names(pro.taxo))
+
+pro.table.10 <- pro.table[, names(rev(sort(colSums(pro.table)))[c(1:10)])]
+pro.taxo.10 <- fir.taxo[colnames(pro.table.10), ]
+dim(pro.table.10)
+sum(colMeans(pro.table.10))
+```
+
+
+What percentage of observations are represented here? `r sum(colMeans(pro.table.10))*100`%
+
+
+```{r}
+pro.mean <- data.frame(matrix(NA, 4, 10))
+row.names(pro.mean) <- levels(map$loc.gen2)
+names(pro.mean) <- colnames(pro.table.10)
+
+pro.se <- data.frame(matrix(NA, 4, 10))
+row.names(pro.se) <- levels(map$loc.gen2)
+names(pro.se) <- colnames(pro.table.10)
+
+test <- aggregate(pro.table.10[, i], by=list(map$loc.gen2), mean)
+
+if(identical(row.names(pro.mean), as.character(test$Group.1))) {
+  for (i in 1:10) {
+    pro.mean[, i] <- aggregate(pro.table.10[, i], by=list(map$loc.gen2), mean)$x
+    pro.se[, i] <- aggregate(pro.table.10[, i], by=list(map$loc.gen2), se)$x
+    }
+} else {print("Didn't work - rows weren't lined up!")}
+
+pro.mean <- pro.mean[4:1, 10:1] * 100
+pro.se <- pro.se[4:1, 10:1] * 100
+```
+
+
+
+
+So now try to combine them. One error bar spills of the right margin, but it is not worth throwing off the whole balance of the figure. So instead I wrote a simple break at the margin to report the real value. _Might move around if re-rarefied without setting seed. So it goes._ 
+
+
+```{r longPhylumBarplots, fig.height=6, fig.width=12}
+# pdf('phylumFermiProteoBarplot.pdf', height=6, width=12, useDingbats=FALSE)
+# par(mfrow=c(1,2))
+layout(matrix(c(1,2,3), 1,3), widths=c(1.25, 1, 1))
+par(mar=c(5,9,2,2), las=1, font.lab=1, 
+    fg='gray20', col.axis='gray20', col.lab='gray20')
+mids <- barplot(as.matrix(ph.mean), beside=TRUE, horiz=TRUE, las=1, xlim=c(0,.6), 
+  border='white', xlab='', axisnames=FALSE, 
+  col=c('cornflowerblue', 'darkorange', 'gray30'), xaxt='n', font.lab=2)
+abline(v=c(seq(.1, .6, .1)), col='white', lwd=.5)
+arrows(unlist(c(ph.mean-ph.se)), unlist(c(mids)), 
+     unlist(c(ph.mean+ph.se)), unlist(c(mids)),
+	code=3, angle=90, length=.01)
+axis(1, at=c(0,.1,.2,.3,.4,.5,.6), labels=c(0,10,20,30,40,50,60))
+legend(.40, 4, legend=c('phone', 'thumb', 'index'), pch=15, pt.cex=3, cex=1.4, 
+	col=c('gray30', 'darkorange', 'cornflowerblue'), bty='n', y.intersp=.9)
+mtext('Percent of Each Sample', side=1, line=2.4, font=2)
+mtext('(a) Most abundant phyla', side=3, line=0, font=2, at=0, adj=0)
+mtext(names(ph.mean), side=2, at=c(mids[2, ]), line=.2, font=1)
+par(xpd=TRUE)
+segments(0, c(mids[1, ]-.45), 0, c(mids[3, ]+.45))
+par(xpd=FALSE)
+
+# Firmicutes
+par(mar=c(5,8,2,2), las=1, font.lab=1, xpd=FALSE, 
+    fg='gray20', col.axis='gray20', col.lab='gray20')
+mids <- barplot(as.matrix(fir.mean), beside=TRUE, horiz=TRUE, las=1, xlim=c(0,8), 
+  border='white', axisnames=FALSE, 
+  col=c('gray30', 'cornflowerblue'), font.lab=2)
+abline(v=c(seq(1, 8, 1)), col='white', lwd=.5)
+arrows(unlist(c(fir.mean-fir.se)), unlist(c(mids)), 
+     unlist(c(fir.mean+fir.se)), unlist(c(mids)),
+  code=3, angle=90, length=.01)
+mtext('Percent of Each Sample', side=1, line=2.4, font=2)
+mtext('(b) Firmicutes', side=3, line=0, font=2, at=0, adj=0)
+
+par(xpd=TRUE)
+segments(0, c(mids[1, ]-.45), 0, c(mids[4, ]+.45))
+for (i in 1:10) {
+  segments(-.05, mean(mids[, i]), -.5, mean(mids[, i]), col='gray60')
+text(-.25, mean(mids[1:2, i]), 
+     "\\MA",vfont=c("sans serif symbol","plain"), font=2, col='gray20', cex=1.5)
+text(-.25, mean(mids[3:4, i]), 
+     "\\VE",vfont=c("sans serif symbol","plain"), font=2, col='gray20', cex=1.5)
+barname <- taxo[names(fir.mean)[i], 'genus']
+font <- 3
+if (barname == '') {
+  barname <- taxo[names(fir.mean)[i], 'family']
+  font <- 1}
+mtext(barname, side=2, at=mean(mids[, i]), line=1.5, font=font)
+}
+
+# Proteobacteria
+par(mar=c(5,8,2,2.5), las=1, font.lab=1, xpd=FALSE, 
+    fg='gray20', col.axis='gray20', col.lab='gray20')
+mids <- barplot(as.matrix(pro.mean), beside=TRUE, horiz=TRUE, las=1, xlim=c(0,8), 
+  border='white', axisnames=FALSE, 
+  col=c('gray30', 'cornflowerblue'), font.lab=2)
+abline(v=c(seq(1, 8, 1)), col='white', lwd=.5)
+arrows(unlist(c(pro.mean-pro.se)), unlist(c(mids)), 
+     unlist(c(pro.mean+pro.se)), unlist(c(mids)),
+  code=3, angle=90, length=.01)
+mtext('Percent of Each Sample', side=1, line=2.4, font=2)
+mtext('(c) Proteobacteria', side=3, line=0, font=2, at=0, adj=0)
+
+par(xpd=TRUE)
+segments(0, c(mids[1, ]-.45), 0, c(mids[4, ]+.45))
+for (i in 1:10) {
+  segments(-.05, mean(mids[, i]), -.5, mean(mids[, i]), col='gray60')
+text(-.25, mean(mids[1:2, i]), 
+     "\\MA",vfont=c("sans serif symbol","plain"), font=2, col='gray20', cex=1.5)
+text(-.25, mean(mids[3:4, i]), 
+     "\\VE",vfont=c("sans serif symbol","plain"), font=2, col='gray20', cex=1.5)
+barname <- taxo[names(pro.mean)[i], 'genus']
+font <- 3
+if (barname == '') {
+  barname <- taxo[names(pro.mean)[i], 'family']
+  font <- 1 }
+mtext(barname, side=2, at=mean(mids[, i]), line=1.5, font=font)
+if (barname == 'Photobacterium') {fixit <- i}
+}
+
+# Fix Photobacterium error bar break
+fixx <- 8
+fixy <- mids[1, fixit]
+realSE <- round(pro.mean[1, fixit] + pro.se[1, fixit], 1)
+par(xpd=TRUE)
+segments(fixx-.1, fixy-.5, fixx+.1, fixy+.5)
+segments(fixx+.1, fixy-.5, fixx+.3, fixy+.5)
+text(fixx+.1, fixy, realSE, pos=4, cex=.7)
+
+# dev.off()
+```
+
+----------------------
+
+### Canberra Distance Barplots - how are phones related to people?
+
+Next, we want to know how communities break out between people and their phones. To do this, we make a distance matrix. In our case, we want to be able to easily explain so we use Jaccard similarity $$ S_{jaccard} = \frac{shared~richness}{combined~richness} $$ so that we can interpret in easy language. Later, we'll also want a _similarity_ rather than a _distance_, so we'll invert the distance R gives by default $$ S_{jaccard} = 1-D_{jaccard} $$. This way things with more in common have higher values, and that is easier to visualize.
+
+Note that this was tried also with the same Canberra distance that will be used later for ordinations. Results were almost identical, but Jaccard is much easier to interpret for this sort of graph, so we use Jaccard. 
+
+
+```{r barplotDistances}
 dis <- vegdist(rw.25, 'jaccard')
 ```
 
@@ -332,7 +584,7 @@ bar.df.nowash.j <- makeBarDF()
 bar.nowash.j <- makeBarSummary(bar.df=bar.df.nowash.j)
 ```
 
-To make combining side by side barplots easier, we'll combine them into joined data frames based on their variables (males and females, and wash and no-wash). Then one last step to invert the numbers from a distance to a similarity. 
+To make it easeier to combine side by side barplots, we'll combine them into joined data frames based on their variables (males and females, and wash and no-wash). Then one last step to invert the numbers from a distance to a similarity. 
 
 ```{r combineBarplots}
 bar.mf <- data.frame(rbind(bar.male.j[1, ], bar.female.j[1, ],
@@ -349,13 +601,16 @@ bar.wnw <- 1-bar.wnw
 
 All data are in place, so there is lots of futzy code to get barplots to look nice. These were modeled after Edward Tufte's _The Visual Display of Quantitative Information_.
 
-```{r longBarplotFigure,fig.width=8,fig.height=4,dpi=100}
+```{r longBarplotFigure,fig.width=8.5,fig.height=4,dpi=100, tidy=FALSE}
+# pdf('longBarplotFigure.pdf', width=8, height=4)
 ylim <- c(0,.5)
 layout(matrix(c(1,2,3), 1,3), widths=c(1, 1.6, 1.6))
-par(mar=c(4, 4.5, 2, 1), las=1, fg='gray20', lheight=1)
+par(mar=c(4, 4.5, 2, 1), las=1, fg='gray20', lheight=1, col.axis='gray20', col.lab='gray20')
 mids <- barplot(bar.jac$mean, las=1, 
   border='transparent', axes=FALSE, ylim=ylim, yaxs='i', 
-	ylab='Percent of species in common')
+	# ylab='Percent of species in common')
+  ylab='')
+mtext('Jaccard Similarity\n(as % of shared OTUs)', side=2, line=2, las=0, cex=.8)
 abline(h=c(.1,.2,.3,.4,.5), col='white', lwd=1)
 mtext(c('index\n&\nthumb', 'index\n&\nphone', 'thumb\n&\nphone'), 
 	side=1, line=2.1, at=c(mids), cex=.7, col='gray20')
@@ -363,7 +618,7 @@ axis(2, col='gray20', col.ticks='gray20',
 	at=c(0,.1,.2,.3,.4,.5), labels=c(0,10,20,30,40,'50%'))
 arrows(mids, bar.jac$se.lo, mids, bar.jac$se.hi, code=3, 
 	angle=90, length=.05, col='gray40')
-mtext('All samples', font=2, col='gray20')
+mtext('(a) All samples', font=2, col='gray20', line=.5)
 #
 par(mar=c(4, 2, 2, 1))
 mids <- barplot(bar.mf$mean, las=1, col=c('gray80', 'gray50'),
@@ -374,7 +629,7 @@ mtext(c('index\n&\nthumb', 'index\n&\nphone', 'thumb\n&\nphone'),
 	at=c(mean(mids[1:2,1]), mean(mids[3:4,1]), mean(mids[5:6,1])))
 arrows(mids, bar.mf$se.lo, mids, bar.mf$se.hi, code=3, 
 	angle=90, length=.05, col='gray20')
-mtext('Male or Female?', font=2, col='gray20')
+mtext('(b) Male or Female?', font=2, col='gray20', line=.5)
 legend(5, .5, legend=c('m', 'f'), pch=15, col=c('gray80', 'gray50'), 
 	pt.cex=2, bty='n')
 par(xpd=TRUE)
@@ -392,7 +647,7 @@ mtext(c('index\n&\nthumb', 'index\n&\nphone', 'thumb\n&\nphone'),
 	at=c(mean(mids[1:2,1]), mean(mids[3:4,1]), mean(mids[5:6,1])))
 arrows(mids, bar.wnw$se.lo, mids, bar.wnw$se.hi, code=3, 
 	angle=90, length=.05, col='gray20')
-mtext('Did you wash your hands?', font=2, col='gray20')
+mtext('(c) Did you wash your hands?', font=2, col='gray20', line=.5)
 legend(5, .5, legend=c('yes', 'no'), pch=15, col=c('gray80', 'gray50'), 
 	pt.cex=2, bty='n')
 par(xpd=TRUE)
@@ -400,11 +655,12 @@ segments(c(mids[c(1,3,5), 1])-.48, rep(-.00, 3),
 	     c(mids[c(2,4,6), 1])+.48, rep(-.00, 3), 
 	     col='gray30')  
 par(xpd=FALSE)
+# dev.off()
 ```
 
-Isn't that nice? So this figure tells us a couple of really interesting things about the world that we didn't know before! For instance, about 35% of the bacterial taxa we find on our own index finger are also found on the opposing thumb. And (even though fewer) about 20 are also found on our phones! That pattern is repeated regardless of whether we are looking at men or women, but interestingly, women seem to have more taxa in common with their phones. And your two fingers have more in common if you did not wash your hands. 
+Isn't that nice? So this figure tells us a couple of really interesting things about the world that we didn't know before! For instance, about 35% of the bacterial taxa we find on our own index finger are also found on the opposing thumb. And (even though fewer) about 20% are also found on our phones! That general pattern is repeated regardless of whether we are looking at men or women, but interestingly, women seem to have more taxa in common with their phones. And your two fingers have more in common if you did not wash your hands. 
 
-We can use simple t-tests to check some of the patterns in the plots. For instance: Is the first difference significant (are fingers closer to one another than either finger compared to phones)? First, we again need to invert distances to similarities for easier interpretation (already did this in summary tables, but now for raw distance data frames).
+We can use simple paired t-tests to check some of the patterns in the plots. For instance: Is the first difference significant (are fingers closer to one another than either finger compared to phones)? First, we again need to invert distances to similarities for easier interpretation (already did this in summary tables, but now for raw distance data frames).
 
 ```{r distanceToSimilarity}
 bar.jac.df <- 1-bar.jac.df
@@ -415,11 +671,13 @@ bar.df.nowash.j <- 1-bar.df.nowash.j
 ```
 
 ```{r jaccardTTests}
-t.test(bar.jac.df$in.th, bar.jac.df$in.ph)
-t.test(bar.jac.df$in.th, bar.jac.df$th.ph)
+t.test(bar.jac.df$in.th, bar.jac.df$in.ph, paired=TRUE)
+t.test(bar.jac.df$in.th, bar.jac.df$th.ph, paired=TRUE)
 ```
 
-Yes. Very much so. It looks like our fingers have about half of their taxa in common, while fingers and phones only share about 30% of taxa. And how about males and females differentially related to their phones?
+Yes. Very much so. It looks like our fingers have about 35% of their taxa in common, while fingers and phones only share about 20% of taxa. 
+
+And how about males and females differentially related to their phones?
 
 ```{r jaccardTTestsGender}
 t.test(bar.df.male.j$in.ph, bar.df.female.j$in.ph)
@@ -430,14 +688,15 @@ Not so much. And are our fingers more similar if we don't wash our hands?
 
 ```{r jaccardTTestWash}
 t.test(bar.df.wash.j$in.th, bar.df.nowash.j$in.th)
+t.test(bar.df.wash.j$in.ph, bar.df.nowash.j$in.ph)
 ```
 
-Suggestive, but not totally convincing - there might be a difference of about 8% of species. 
+The first (two fingers) is suggestive, but not totally convincing - there might be a difference of about 10% of OTUs. The second (relationship to phones) is not different at all. 
 
-One last barplot to show whether or not our phones are more indicative of our microbiome. The workflow will be pretty much the same, but we are picking out: 
+One last barplot to show whether or not our phones are more indicative of our own microbiome. The workflow will be pretty much the same, but we are picking out: 
 
 * the similarities of each person's index finger compared to their own phone, and 
-* each person's finger compared to everyone else's phone
+* each person's finger compared to the average distance to everyone else's phone
 
 ```{r makePersonToPhoneData,tidy=FALSE,fig.width=2.5,fig.height=3,dpi=100}
 dismat <- as.matrix(dis)
@@ -471,11 +730,14 @@ bar.others.df <- bar.df2
 
 And make the plot. 
 
-```{r makePersonToPhoneBarplot, fig.width=2.5, fig.height=3}
-par(mar=c(3, 4.5, 2, 1), las=1)
+```{r makePersonToPhoneBarplot, fig.width=2.5, fig.height=3, tidy=FALSE}
+# pdf('resemblePhone.pdf', width=2.5, height=3)
+par(mar=c(3, 4.5, 2, 1), las=1, col.axis='gray20', col.lab='gray20', fg='gray20')
 mids <- barplot(bar.others$mean, las=1, 
 	border='transparent', axes=FALSE, ylim=c(0,.3), yaxs='i', 
-	ylab='Percent of species in common')
+	# ylab='Percent of species in common')
+  ylab='')
+mtext('Jaccard Similarity\n(as % of shared OTUs)', side=2, line=2.2, las=0)
 abline(h=seq(0, .3, .05), col='white', lwd=1)
 mtext(c('index &\nown\nphone', 'index &\nother\nphones'), 
 	side=1, line=1.6, at=c(mids), cex=.8, col='gray20')
@@ -484,14 +746,23 @@ axis(2, col='gray20', col.ticks='gray20',
 arrows(mids, bar.others$se.lo, mids, bar.others$se.hi, code=3, 
 	angle=90, length=.05, col='gray40')
 mtext('Does your phone\nresemble you?', font=2, col='gray20')
+# dev.off()
+```
 
-t.test(bar.others.df$same.in.ph, bar.others.df$others.in.ph)
+
+
+And is that significant?
+
+```{r}
+apply(bar.others.df, 2, mean)
+t.test(bar.others.df$same.in.ph, bar.others.df$others.in.ph, paired=TRUE)
 ```
 
 So yes, your phone might be able to identify you. Or in other words, we see some evidence that the microbial assemblages on our phones are perhaps extensions of our own, and that they are to some degree personalized to us!
 
 -------------------
-### Community differences
+
+### Community differences - Ordination and Discriminant Analysis
 
 Do the fingers of men and women harbor different types of bacteria? Previous research says yes. In the current study, some people washed hands and some didn't. So we should find out if we have a balanced study (i.e., relatively even numbers in all four categories?). The answer is, of course, somewhat funny, though not _significantly_ funny. 
 
@@ -501,6 +772,7 @@ cst <- chisq.test(gender.wash)
 cst
 cst$observed
 cst$expected
+rm(cst, gender.wash)
 ```
 
 Anyway, the sample is reasonably well balanced. PERMANOVA tests like `adonis` are not necessarily robust to big inbalances, but probably not a problem for us. 
@@ -522,7 +794,7 @@ rw.25.nmds.can <- bestnmds(rw.25.can, k=2)
 
 If we emphasize gender, it seems that men and women fall in different parts of the plot, and their communities, when considering all samples, are very significantly different. 
 
-```{r plotNMDS,tidy=FALSE}
+```{r plotNMDS,tidy=FALSE, fig.height=4, fig.width=4}
 rw.25.nmds.can$stress
 n <- rw.25.nmds.can
 
@@ -543,33 +815,14 @@ legend('topright', legend=c('index', 'thumb', 'phone'),
 
 
 
-Create another set of variables that combine sample location with gender - this allows the use of ellipses to visualize confidence intervals in the ordination. 
-
-```{r createIndexVariables}
-map$loc.gen <- paste(map$location, map$gender, sep='.')
-map$location2 <- as.character(map$location)
-map$location2[map$location2 != 'phone'] <- 'finger'
-map$location2 <- factor(map$location2)
-map$loc.gen2 <- paste(map$location2, map$gender, sep='.')
-
-index <- which(map$location == 'index')
-thumb <- which(map$location == 'thumb')
-finger <- which(map$location2 == 'finger')
-
-m <- which(map$gender == 'm')
-f <- which(map$gender == 'f')
-p <- which(map$location == 'phone')
-
-```
+Earlier, we created sets of variables that combine sample location with gender - this now allows the use of ellipses to visualize confidence intervals in the ordination. 
 
 
-This first version of the ordination groups all thumb and index samples together as blue fingers. This, of course, is pseudoreplication. Wouldn't want to apply statistics to this view, but it is helpful to see that the samples and ellipses fall in pretty much identcal places regardless of which finger is used, or if all are used together. Thus we can use just index fingers for all further analyses. 
 
-In other words, it would be ideal if we could get most information only from sampling a single finger in future cell phone monitoring studies. 
+It would be ideal if we could get most information only from sampling a single finger in future cell phone monitoring studies, instead of looking at both index fingers and thumbs. This ordination displays both fingers and phones. 
 
 ```{r genderFingerNMDS,fig.width=8,fig.height=4}
-# pdf('../taxo_gender_allfinger_ellipse_ord.pdf', height=4, width=8)
-
+# pdf('ordinationGenderBothFingers.pdf', height=4, width=8)
 par(mfrow=c(1,2))
 par(mar=c(2,2,2,1), las=0)
 plot(n$points, type='n', ann=FALSE, xaxt='n', yaxt='n')
@@ -610,10 +863,9 @@ points(n$points[intersect(m,finger), ], pch=21, cex=2.5, col='gray30',
 points(n$points[intersect(m,p), ], pch=21, cex=2.5, col='gray30', 
       bg=rgb(0,0,0, .5)) 
 # text(5,5,'Males', font=2, cex=2, col='gray40')
-legend('bottomleft', legend=c('phone', 'finger'), pch=21, bty='n', y.intersp=.9,
+legend('bottomright', legend=c('phone', 'finger'), pch=21, bty='n', y.intersp=.9,
        pt.bg=c('gray40', 'cornflowerblue'), col='gray30', cex=1, pt.cex=1.5)
 mtext('(b) Males', line=.2, font=2, cex=1.5, adj=0)
-
 # dev.off()
 ```
 
@@ -621,7 +873,7 @@ mtext('(b) Males', line=.2, font=2, cex=1.5, adj=0)
 This version uses only index fingers compared to phones. 
 
 ```{r genderIndexNMDS,fig.width=8,fig.height=4}
-# pdf('../taxo_gender_index_ellipse_ord.pdf', height=4, width=8)
+# pdf('ordinationGenderIndex.pdf', height=4, width=8)
 
 par(mfrow=c(1,2))
 par(mar=c(2,2,2,1), las=0)
@@ -662,44 +914,69 @@ points(n$points[intersect(m,index), ], pch=21, cex=2.5, col='gray30',
 points(n$points[intersect(m,p), ], pch=21, cex=2.5, col='gray30', 
       bg=rgb(0,0,0, .5)) 
 # text(5,5,'Males', font=2, cex=2, col='gray40')
-legend('bottomleft', legend=c('phone', 'index'), pch=21, bty='n', y.intersp=.9,
+legend('bottomright', legend=c('phone', 'index'), pch=21, bty='n', y.intersp=.9,
        pt.bg=c('gray40', 'cornflowerblue'), col='gray30', cex=1, pt.cex=1.5)
 mtext('(b) Males', line=.2, font=2, cex=1.5, adj=0)
-
 # dev.off()
 ```
 
 
-First though, it seems clear that women and men are falling out in different parts of the ordination. And in fact the difference is highly significant for both phones and fingers - gender makes a difference. 
+It seems clear that women and men are falling out in different parts of the ordination. And in fact the difference is highly significant for both phones and fingers - gender makes a difference.  
 
-```{r canGenderAdonis,results='asis'}
-can.phones <- as.dist(as.matrix(rw.25.can)[p, p])
-map.phones <- map[p, ]
-can.fingers <- as.dist(as.matrix(rw.25.can)[finger, finger])
-map.fingers <- map[finger, ]
+Also, a quick function to print simple \LaTeX tables over and over.  
 
-adonisPhoneGender <- adonis(can.phones ~ map.phones$gender)$aov.tab
-adonisFingerGender <- adonis(can.fingers ~ map.fingers$gender)$aov.tab
-
-print(xtable(adonisPhoneGender), type='html')
-print(xtable(adonisFingerGender), type='html')
+```{r xtableFunction}
+pxtable <- function(tab, capt='') {
+  print(xtable(tab, caption=capt), comment=FALSE, timestamp=FALSE)#, type='html')
+  }
 ```
 
 
-Phones, maybe - but also underpowered. Fingers, definitely, but this includes all fingers together which is pseudoreplication...
+```{r canGenderAdonis,results='asis'}
+can.phones <- as.dist(as.matrix(rw.25.can)[p, p])
+can.fingers <- as.dist(as.matrix(rw.25.can)[finger, finger])
+can.index <- as.dist(as.matrix(rw.25.can)[index, thumb])
+can.thumb <- as.dist(as.matrix(rw.25.can)[thumb, thumb])
+
+map.phones <- map[p, ]
+map.fingers <- map[finger, ]
+map.index <- map[index, ]
+map.thumb <- map[thumb, ]
+
+adonisAllGender <- adonis(rw.25.can ~ map$gender)$aov.tab
+adonisPhoneGender <- adonis(can.phones ~ map.phones$gender)$aov.tab
+adonisFingerGender <- adonis(can.fingers ~ map.fingers$gender)$aov.tab
+adonisIndexGender <- adonis(can.index ~ map.index$gender)$aov.tab
+adonisThumbGender <- adonis(can.thumb ~ map.thumb$gender)$aov.tab
+
+#print(xtable(adonisAllGender))#, type='html')
+pxtable(adonisAllGender, capt='Gender difference for all samples together?')
+pxtable(adonisFingerGender, capt='Gender difference for both fingers together?')
+pxtable(adonisPhoneGender, capt='Gender difference for just phones?')
+pxtable(adonisIndexGender, capt='Gender difference for just index fingers?')
+pxtable(adonisThumbGender, capt='Gender difference for just thumbs?')
+```
+
+\clearpage
+
+Phones, maybe - but also underpowered. Fingers, definitely, but this includes all fingers together which is pseudoreplication. Best to rely on just one finger. 
 
 Do index fingers tell the whole story? Or are both fingers together more powerful? It is a tough question because it is an unbalanced comparison, but the nmds above makes it clear that the significant separation from phones is evident even when only using an index and not grouping both fingers. 
 
 
 ```{r canPhoneFingersAdonis,results='asis'} 
-can.index.phone.f <- as.dist(as.matrix(rw.25.can)[intersect(c(index,p),f), intersect(c(index,p),f)])
+can.index.phone.f <- as.dist(as.matrix(rw.25.can)[intersect(c(index,p),f), 
+                                                  intersect(c(index,p),f)])
 map.index.phone.f <- map[intersect(c(index,p),f), ]
-can.index.phone.m <- as.dist(as.matrix(rw.25.can)[intersect(c(index,p),m), intersect(c(index,p),m)])
+can.index.phone.m <- as.dist(as.matrix(rw.25.can)[intersect(c(index,p),m), 
+                                                  intersect(c(index,p),m)])
 map.index.phone.m <- map[intersect(c(index,p),m), ]
 
-can.thumb.phone.f <- as.dist(as.matrix(rw.25.can)[intersect(c(thumb,p),f), intersect(c(thumb,p),f)])
+can.thumb.phone.f <- as.dist(as.matrix(rw.25.can)[intersect(c(thumb,p),f), 
+                                                  intersect(c(thumb,p),f)])
 map.thumb.phone.f <- map[intersect(c(index,p),f), ]
-can.thumb.phone.m <- as.dist(as.matrix(rw.25.can)[intersect(c(thumb,p),m), intersect(c(thumb,p),m)])
+can.thumb.phone.m <- as.dist(as.matrix(rw.25.can)[intersect(c(thumb,p),m), 
+                                                  intersect(c(thumb,p),m)])
 map.thumb.phone.m <- map[intersect(c(thumb,p),m), ]
 
 can.finger.phone.f <- as.dist(as.matrix(rw.25.can)[f, f])
@@ -715,24 +992,24 @@ adonisThumbPhoneM <- adonis(can.thumb.phone.m ~ map.thumb.phone.m$location)$aov.
 adonisFingerPhoneF <- adonis(can.finger.phone.f ~ map.finger.phone.f$location2)$aov.tab
 adonisFingerPhoneM <- adonis(can.finger.phone.m ~ map.finger.phone.m$location2)$aov.tab
 
-print(xtable(adonisIndexPhoneF), type='html')
-print(xtable(adonisIndexPhoneM), type='html')
-print(xtable(adonisThumbPhoneF), type='html')
-print(xtable(adonisThumbPhoneM), type='html')
-print(xtable(adonisFingerPhoneF), type='html')
-print(xtable(adonisFingerPhoneM), type='html')
+pxtable(adonisIndexPhoneF, capt="Women's phones different from index fingers?")
+pxtable(adonisIndexPhoneM, capt="Men's phones different from index fingers?")
+pxtable(adonisThumbPhoneF, capt="Women's phones different from thumbs?")
+pxtable(adonisThumbPhoneM, capt="Men's phones different from thumbs?")
+pxtable(adonisFingerPhoneF, capt="Women's phones different from both fingers together?")
+pxtable(adonisFingerPhoneM, capt="Men's phones different from both fingers together?")
 ```
 
+\clearpage
 
 
-Index fingers alone seem to explain the most variation. R^2 is higher, though the F values are slightly lower due to less statistical power. This indicates that index alone is a good finger to use in further studies. Additionally, women never show a significant difference from the communities on their phones, while men do! Perhaps women will be easier to track by their phones? 
+Index fingers alone seem to explain the most variation. R$^{2}$ is higher, though the F values are slightly lower due to less statistical power. This indicates that index alone is a good finger to use in further studies. Additionally, women never show a significant difference from the communities on their phones, while men do! Perhaps women will be easier to track by their phones? 
 
 
 ```{r saveItAll,cache=FALSE}
-getwd()
 ls()
 save.image('phones_knitr.RData')
 ```
 
-
+This cluttered workspace _should_ have everything necessary to reproduce any analysis or figure separately without running the entire script. 
 
