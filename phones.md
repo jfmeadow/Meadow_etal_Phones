@@ -1158,6 +1158,125 @@ mean of the differences
 
 So yes, your phone might be able to identify you. Or in other words, we see some evidence that the microbial assemblages on our phones are perhaps extensions of our own, and that they are to some degree personalized to us!
 
+But this distance might just be driven by women, so quick check to see if this result varies by gender. It is lower power, so can't really be compared directly to the test above, but gives us an idea. 
+
+
+```r
+bar.others.f.df <- bar.others.df[which(map[index, 'gender'] == 'f'), ]
+
+bar.summary.f <- data.frame(
+  			cbind(apply(bar.others.f.df, 2, mean), 
+					 (apply(bar.others.f.df, 2, sd)/sqrt(nrow(bar.others.f.df)))))
+  
+bar.summary.f[, 3] <- bar.summary.f[, 1]-bar.summary.f[, 2]
+bar.summary.f[, 4] <- bar.summary.f[, 1]+bar.summary.f[, 2]
+names(bar.summary.f) <- c('mean', 'se', 'se.lo', 'se.hi')
+```
+
+
+
+```r
+bar.others.m.df <- bar.others.df[which(map[index, 'gender'] == 'm'), ]
+
+bar.summary.m <- data.frame(
+    		cbind(apply(bar.others.m.df, 2, mean), 
+					 (apply(bar.others.m.df, 2, sd)/sqrt(nrow(bar.others.m.df)))))
+
+bar.summary.m[, 3] <- bar.summary.m[, 1]-bar.summary.m[, 2]
+bar.summary.m[, 4] <- bar.summary.m[, 1]+bar.summary.m[, 2]
+names(bar.summary.m) <- c('mean', 'se', 'se.lo', 'se.hi')
+```
+
+
+And make the plots. 
+
+
+```r
+# pdf('resemblePhone.pdf', width=2.5, height=3)
+par(mar=c(3, 4.5, 2, 1), las=1, col.axis='gray20', col.lab='gray20', fg='gray20')
+mids <- barplot(bar.summary.f$mean, las=1, 
+	border='transparent', axes=FALSE, ylim=c(0,.3), yaxs='i', 
+  ylab='')
+mtext('Jaccard Similarity\n(as % of shared OTUs)', side=2, line=2.2, las=0)
+abline(h=seq(0, .3, .05), col='white', lwd=1)
+mtext(c('index &\nown\nphone', 'index &\nother\nphones'), 
+	side=1, line=1.6, at=c(mids), cex=.8, col='gray20')
+axis(2, col='gray20', col.ticks='gray20', 
+	at=c(0,.1,.2,.3), labels=c(0,10,20,'30%'))
+arrows(mids, bar.summary.f$se.lo, mids, bar.summary.f$se.hi, code=3, 
+	angle=90, length=.05, col='gray40')
+mtext("Do women resemble\ntheir phones?", font=2, col='gray20')
+```
+
+![plot of chunk makeGenderToPhoneBarplot](figure/makeGenderToPhoneBarplot1.png) 
+
+```r
+
+par(mar=c(3, 4.5, 2, 1), las=1, col.axis='gray20', col.lab='gray20', fg='gray20')
+mids <- barplot(bar.summary.m$mean, las=1, 
+  border='transparent', axes=FALSE, ylim=c(0,.3), yaxs='i', 
+  ylab='')
+mtext('Jaccard Similarity\n(as % of shared OTUs)', side=2, line=2.2, las=0)
+abline(h=seq(0, .3, .05), col='white', lwd=1)
+mtext(c('index &\nown\nphone', 'index &\nother\nphones'), 
+	side=1, line=1.6, at=c(mids), cex=.8, col='gray20')
+axis(2, col='gray20', col.ticks='gray20', 
+	at=c(0,.1,.2,.3), labels=c(0,10,20,'30%'))
+arrows(mids, bar.summary.m$se.lo, mids, bar.summary.m$se.hi, code=3, 
+	angle=90, length=.05, col='gray40')
+mtext("Do men resemble\ntheir phones?", font=2, col='gray20')
+```
+
+![plot of chunk makeGenderToPhoneBarplot](figure/makeGenderToPhoneBarplot2.png) 
+
+
+
+
+And is that significant for both groups?
+
+
+```r
+diff.f <- round(diff(c(apply(bar.others.f.df, 2, mean))) * (-100), digits=2)
+t.test(bar.others.f.df$same.in.ph, bar.others.f.df$others.in.ph, paired=TRUE)
+```
+
+```
+
+	Paired t-test
+
+data:  bar.others.f.df$same.in.ph and bar.others.f.df$others.in.ph
+t = 5.183, df = 9, p-value = 0.0005769
+alternative hypothesis: true difference in means is not equal to 0
+95 percent confidence interval:
+ 0.06184 0.15764
+sample estimates:
+mean of the differences 
+                 0.1097 
+```
+
+```r
+diff.m <- round(diff(c(apply(bar.others.m.df, 2, mean))) * (-100), digits=2)
+t.test(bar.others.m.df$same.in.ph, bar.others.m.df$others.in.ph, paired=TRUE)
+```
+
+```
+
+	Paired t-test
+
+data:  bar.others.m.df$same.in.ph and bar.others.m.df$others.in.ph
+t = 4.886, df = 6, p-value = 0.002749
+alternative hypothesis: true difference in means is not equal to 0
+95 percent confidence interval:
+ 0.04524 0.13601
+sample estimates:
+mean of the differences 
+                0.09062 
+```
+
+
+
+Yes - both sexes share, on average, more with their own phones than with everyone else's. Men share about 9.06% percent of taxa while women share 10.97%. 
+
 -------------------
 
 ### Community differences - Ordination and Discriminant Analysis
@@ -1659,38 +1778,40 @@ ls()
 ```
 
 ```
- [1] "adonisAllGender"    "adonisFingerGender" "adonisFingerPhoneF"
- [4] "adonisFingerPhoneM" "adonisIndexGender"  "adonisIndexPhoneF" 
- [7] "adonisIndexPhoneM"  "adonisPhoneGender"  "adonisThumbGender" 
-[10] "adonisThumbPhoneF"  "adonisThumbPhoneM"  "bar.df"            
-[13] "bar.df.female.j"    "bar.df.male.j"      "bar.df.nowash.j"   
-[16] "bar.df.wash.j"      "bar.df2"            "bar.female.j"      
-[19] "bar.jac"            "bar.jac.df"         "bar.male.j"        
-[22] "bar.mf"             "bar.nowash.j"       "bar.others"        
-[25] "bar.others.df"      "bar.summary2"       "bar.wash.j"        
-[28] "bar.wnw"            "barname"            "can.finger.phone.f"
-[31] "can.finger.phone.m" "can.fingers"        "can.index"         
-[34] "can.index.phone.f"  "can.index.phone.m"  "can.phones"        
-[37] "can.thumb"          "can.thumb.phone.f"  "can.thumb.phone.m" 
-[40] "dis"                "dismat"             "Evenness"          
-[43] "f"                  "finger"             "fir.mean"          
-[46] "fir.se"             "fir.table"          "fir.table.10"      
-[49] "fir.taxo"           "fir.taxo.10"        "fixit"             
-[52] "fixx"               "fixy"               "font"              
-[55] "i"                  "index"              "m"                 
-[58] "makeBarDF"          "makeBarSummary"     "makeTaxo"          
-[61] "map"                "map.finger.phone.f" "map.finger.phone.m"
-[64] "map.fingers"        "map.index"          "map.index.phone.f" 
-[67] "map.index.phone.m"  "map.phones"         "map.thumb"         
-[70] "map.thumb.phone.f"  "map.thumb.phone.m"  "mids"              
-[73] "n"                  "p"                  "ph"                
-[76] "ph.mean"            "ph.se"              "pro.mean"          
-[79] "pro.se"             "pro.table"          "pro.table.10"      
-[82] "pro.taxo"           "pro.taxo.10"        "pxtable"           
-[85] "QiimeIn"            "realSE"             "rw.25"             
-[88] "rw.25.can"          "rw.25.nmds.can"     "rw.25.rel"         
-[91] "rw.taxo.25"         "se"                 "taxo"              
-[94] "test"               "thumb"              "ylim"              
+  [1] "adonisAllGender"    "adonisFingerGender" "adonisFingerPhoneF"
+  [4] "adonisFingerPhoneM" "adonisIndexGender"  "adonisIndexPhoneF" 
+  [7] "adonisIndexPhoneM"  "adonisPhoneGender"  "adonisThumbGender" 
+ [10] "adonisThumbPhoneF"  "adonisThumbPhoneM"  "bar.df"            
+ [13] "bar.df.female.j"    "bar.df.male.j"      "bar.df.nowash.j"   
+ [16] "bar.df.wash.j"      "bar.df2"            "bar.female.j"      
+ [19] "bar.jac"            "bar.jac.df"         "bar.male.j"        
+ [22] "bar.mf"             "bar.nowash.j"       "bar.others"        
+ [25] "bar.others.df"      "bar.others.f.df"    "bar.others.m.df"   
+ [28] "bar.summary.f"      "bar.summary.m"      "bar.summary2"      
+ [31] "bar.wash.j"         "bar.wnw"            "barname"           
+ [34] "can.finger.phone.f" "can.finger.phone.m" "can.fingers"       
+ [37] "can.index"          "can.index.phone.f"  "can.index.phone.m" 
+ [40] "can.phones"         "can.thumb"          "can.thumb.phone.f" 
+ [43] "can.thumb.phone.m"  "diff.f"             "diff.m"            
+ [46] "dis"                "dismat"             "Evenness"          
+ [49] "f"                  "finger"             "fir.mean"          
+ [52] "fir.se"             "fir.table"          "fir.table.10"      
+ [55] "fir.taxo"           "fir.taxo.10"        "fixit"             
+ [58] "fixx"               "fixy"               "font"              
+ [61] "i"                  "index"              "m"                 
+ [64] "makeBarDF"          "makeBarSummary"     "makeTaxo"          
+ [67] "map"                "map.finger.phone.f" "map.finger.phone.m"
+ [70] "map.fingers"        "map.index"          "map.index.phone.f" 
+ [73] "map.index.phone.m"  "map.phones"         "map.thumb"         
+ [76] "map.thumb.phone.f"  "map.thumb.phone.m"  "mids"              
+ [79] "n"                  "p"                  "ph"                
+ [82] "ph.mean"            "ph.se"              "pro.mean"          
+ [85] "pro.se"             "pro.table"          "pro.table.10"      
+ [88] "pro.taxo"           "pro.taxo.10"        "pxtable"           
+ [91] "QiimeIn"            "realSE"             "rw.25"             
+ [94] "rw.25.can"          "rw.25.nmds.can"     "rw.25.rel"         
+ [97] "rw.taxo.25"         "se"                 "taxo"              
+[100] "test"               "thumb"              "ylim"              
 ```
 
 ```r

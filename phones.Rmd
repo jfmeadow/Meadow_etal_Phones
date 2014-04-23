@@ -753,12 +753,85 @@ mtext('Does your phone\nresemble you?', font=2, col='gray20')
 
 And is that significant?
 
-```{r}
+```{r testResemble}
 apply(bar.others.df, 2, mean)
 t.test(bar.others.df$same.in.ph, bar.others.df$others.in.ph, paired=TRUE)
 ```
 
 So yes, your phone might be able to identify you. Or in other words, we see some evidence that the microbial assemblages on our phones are perhaps extensions of our own, and that they are to some degree personalized to us!
+
+But this distance might just be driven by women, so quick check to see if this result varies by gender. It is lower power, so can't really be compared directly to the test above, but gives us an idea. 
+
+```{r makeFDF}
+bar.others.f.df <- bar.others.df[which(map[index, 'gender'] == 'f'), ]
+
+bar.summary.f <- data.frame(
+  			cbind(apply(bar.others.f.df, 2, mean), 
+					 (apply(bar.others.f.df, 2, sd)/sqrt(nrow(bar.others.f.df)))))
+  
+bar.summary.f[, 3] <- bar.summary.f[, 1]-bar.summary.f[, 2]
+bar.summary.f[, 4] <- bar.summary.f[, 1]+bar.summary.f[, 2]
+names(bar.summary.f) <- c('mean', 'se', 'se.lo', 'se.hi')
+```
+
+```{r makeMDF}
+bar.others.m.df <- bar.others.df[which(map[index, 'gender'] == 'm'), ]
+
+bar.summary.m <- data.frame(
+    		cbind(apply(bar.others.m.df, 2, mean), 
+					 (apply(bar.others.m.df, 2, sd)/sqrt(nrow(bar.others.m.df)))))
+
+bar.summary.m[, 3] <- bar.summary.m[, 1]-bar.summary.m[, 2]
+bar.summary.m[, 4] <- bar.summary.m[, 1]+bar.summary.m[, 2]
+names(bar.summary.m) <- c('mean', 'se', 'se.lo', 'se.hi')
+```
+
+And make the plots. 
+
+```{r makeGenderToPhoneBarplot, fig.width=2.5, fig.height=3, tidy=FALSE}
+# pdf('resemblePhone.pdf', width=2.5, height=3)
+par(mar=c(3, 4.5, 2, 1), las=1, col.axis='gray20', col.lab='gray20', fg='gray20')
+mids <- barplot(bar.summary.f$mean, las=1, 
+	border='transparent', axes=FALSE, ylim=c(0,.3), yaxs='i', 
+  ylab='')
+mtext('Jaccard Similarity\n(as % of shared OTUs)', side=2, line=2.2, las=0)
+abline(h=seq(0, .3, .05), col='white', lwd=1)
+mtext(c('index &\nown\nphone', 'index &\nother\nphones'), 
+	side=1, line=1.6, at=c(mids), cex=.8, col='gray20')
+axis(2, col='gray20', col.ticks='gray20', 
+	at=c(0,.1,.2,.3), labels=c(0,10,20,'30%'))
+arrows(mids, bar.summary.f$se.lo, mids, bar.summary.f$se.hi, code=3, 
+	angle=90, length=.05, col='gray40')
+mtext("Do women resemble\ntheir phones?", font=2, col='gray20')
+
+par(mar=c(3, 4.5, 2, 1), las=1, col.axis='gray20', col.lab='gray20', fg='gray20')
+mids <- barplot(bar.summary.m$mean, las=1, 
+  border='transparent', axes=FALSE, ylim=c(0,.3), yaxs='i', 
+  ylab='')
+mtext('Jaccard Similarity\n(as % of shared OTUs)', side=2, line=2.2, las=0)
+abline(h=seq(0, .3, .05), col='white', lwd=1)
+mtext(c('index &\nown\nphone', 'index &\nother\nphones'), 
+	side=1, line=1.6, at=c(mids), cex=.8, col='gray20')
+axis(2, col='gray20', col.ticks='gray20', 
+	at=c(0,.1,.2,.3), labels=c(0,10,20,'30%'))
+arrows(mids, bar.summary.m$se.lo, mids, bar.summary.m$se.hi, code=3, 
+	angle=90, length=.05, col='gray40')
+mtext("Do men resemble\ntheir phones?", font=2, col='gray20')
+```
+
+
+
+And is that significant for both groups?
+
+```{r testDiffMF}
+diff.f <- round(diff(c(apply(bar.others.f.df, 2, mean))) * (-100), digits=2)
+t.test(bar.others.f.df$same.in.ph, bar.others.f.df$others.in.ph, paired=TRUE)
+diff.m <- round(diff(c(apply(bar.others.m.df, 2, mean))) * (-100), digits=2)
+t.test(bar.others.m.df$same.in.ph, bar.others.m.df$others.in.ph, paired=TRUE)
+```
+
+
+Yes - both sexes share, on average, more with their own phones than with everyone else's. Men share about `r diff.m`% percent of taxa while women share `r diff.f`%. 
 
 -------------------
 
