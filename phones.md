@@ -5,6 +5,9 @@
 
 #### James Meadow (jfmeadow at gmail dot com)
 
+
+
+
 -------------------------
 
 _This analysis document accompanies a manuscript that reports analysis of microbial communities sampled from smartphone touchscreens, as well as the index fingers and thumbs of their owners. This was a project that was conducted as an educational workshop meant to explore innovative ways to monitor health. The manuscript is currently in review. This document was produced with the [`knitr` package](http://yihui.name/knitr/) in R, and all source code can be found on GitHub: [https://github.com/jfmeadow/Meadow_etal_Phones](https://github.com/jfmeadow/Meadow_etal_Phones)_
@@ -19,7 +22,7 @@ The first step is to set a random seed (so results are locked in with those repo
 
 ```r
 set.seed(42)
-options(scipen=7)
+options(scipen=7)  # curtail scientific notation
 library(vegan)
 ```
 
@@ -250,6 +253,17 @@ p <- which(map$location == 'phone')
 
 
 
+Also, a quick function to print simple \LaTeX ~tables over and over.  
+
+
+```r
+pxtable <- function(tab, capt='') {
+  print(xtable(tab, caption=capt), comment=FALSE, timestamp=FALSE)#, type='html')
+  }
+```
+
+
+
 ### Generate taxonomy figure
 
 Taxonomy information, as QIIME gives it, is pretty useless raw. So we have to parse this into a workable data frame, and then use that for figures. First, rename and save on typing! Then the separation between taxonomic levels is used to split strings. A couple more steps and then we have a data frame with 7 taxonomic levels and one last column for total abundance across the rarefied dataset. 
@@ -309,12 +323,136 @@ head(taxo)
 ```
 
 
-Looks good. Then we want to know about the most abundant phyla, to be used for a taxonomy figure. 
+Looks good. Then we want to know about the most abundant phyla, to be used for a taxonomy figure.
+But first, what was the most abundant thing in the dataset?
+
+
+
+
+
+
+```r
+
+medAbu5 <- sort(apply(rw.25, 2, median)/25, TRUE)[1:5]
+medAbu5.m <- sort(apply(rw.25[m, ], 2, median)/25, TRUE)[1:5]
+medAbu5.f <- sort(apply(rw.25[f, ], 2, median)/25, TRUE)[1:5]
+medAbu5.p <- sort(apply(rw.25[p, ], 2, median)/25, TRUE)[1:5]
+medAbu5.fing <- sort(apply(rw.25[finger, ], 2, median)/25, TRUE)[1:5]
+
+pxtable(data.frame(taxo[names(medAbu5), -c(1,7,8)], medAbu=medAbu5), 
+        capt='Most median abundant overall.')
+```
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{rlllllr}
+  \hline
+ & phylum & class & order & family & genus & medAbu \\ 
+  \hline
+2485 & Firmicutes & Bacilli & Gemellales & Gemellaceae & Gemella & 2.64 \\ 
+  25857 & Firmicutes & Bacilli & Lactobacillales & Carnobacteriaceae & Granulicatella & 2.04 \\ 
+  33170 & Actinobacteria & Actinobacteria & Actinomycetales & Micrococcaceae & Rothia & 1.80 \\ 
+  25456 & Actinobacteria & Actinobacteria & Actinomycetales & Actinomycetaceae & Actinomyces & 1.68 \\ 
+  260 & Firmicutes & Bacilli & Lactobacillales & Streptococcaceae & Lactococcus & 1.24 \\ 
+   \hline
+\end{tabular}
+\caption{Most median abundant overall.} 
+\end{table}
+
+```r
+pxtable(data.frame(taxo[names(medAbu5.m), -c(1,7,8)], medAbu=medAbu5.m), 
+        capt='Most median abundant for men.')
+```
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{rlllllr}
+  \hline
+ & phylum & class & order & family & genus & medAbu \\ 
+  \hline
+2485 & Firmicutes & Bacilli & Gemellales & Gemellaceae & Gemella & 1.60 \\ 
+  25857 & Firmicutes & Bacilli & Lactobacillales & Carnobacteriaceae & Granulicatella & 1.28 \\ 
+  260 & Firmicutes & Bacilli & Lactobacillales & Streptococcaceae & Lactococcus & 1.24 \\ 
+  25456 & Actinobacteria & Actinobacteria & Actinomycetales & Actinomycetaceae & Actinomyces & 1.16 \\ 
+  33170 & Actinobacteria & Actinobacteria & Actinomycetales & Micrococcaceae & Rothia & 1.08 \\ 
+   \hline
+\end{tabular}
+\caption{Most median abundant for men.} 
+\end{table}
+
+```r
+pxtable(data.frame(taxo[names(medAbu5.f), -c(1,7,8)], medAbu=medAbu5.f), 
+        capt='Most median abundant for women.')
+```
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{rlllllr}
+  \hline
+ & phylum & class & order & family & genus & medAbu \\ 
+  \hline
+2485 & Firmicutes & Bacilli & Gemellales & Gemellaceae & Gemella & 3.26 \\ 
+  25857 & Firmicutes & Bacilli & Lactobacillales & Carnobacteriaceae & Granulicatella & 3.08 \\ 
+  25456 & Actinobacteria & Actinobacteria & Actinomycetales & Actinomycetaceae & Actinomyces & 2.90 \\ 
+  33170 & Actinobacteria & Actinobacteria & Actinomycetales & Micrococcaceae & Rothia & 2.46 \\ 
+  16496 & Bacteroidetes & Bacteroidia & Bacteroidales & Prevotellaceae & Prevotella & 1.66 \\ 
+   \hline
+\end{tabular}
+\caption{Most median abundant for women.} 
+\end{table}
+
+```r
+pxtable(data.frame(taxo[names(medAbu5.p), -c(1,7,8)], medAbu=medAbu5.p), 
+        capt='Most median abundant on phones.')
+```
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{rlllllr}
+  \hline
+ & phylum & class & order & family & genus & medAbu \\ 
+  \hline
+2485 & Firmicutes & Bacilli & Gemellales & Gemellaceae & Gemella & 3.36 \\ 
+  25857 & Firmicutes & Bacilli & Lactobacillales & Carnobacteriaceae & Granulicatella & 2.32 \\ 
+  33170 & Actinobacteria & Actinobacteria & Actinomycetales & Micrococcaceae & Rothia & 2.20 \\ 
+  25456 & Actinobacteria & Actinobacteria & Actinomycetales & Actinomycetaceae & Actinomyces & 1.80 \\ 
+  26366 & Bacteroidetes & Bacteroidia & Bacteroidales & [Paraprevotellaceae] & [Prevotella] & 1.36 \\ 
+   \hline
+\end{tabular}
+\caption{Most median abundant on phones.} 
+\end{table}
+
+```r
+pxtable(data.frame(taxo[names(medAbu5.fing), -c(1,7,8)], medAbu=medAbu5.fing), 
+        capt='Most median abundant on fingers.')
+```
+
+\begin{table}[ht]
+\centering
+\begin{tabular}{rlllllr}
+  \hline
+ & phylum & class & order & family & genus & medAbu \\ 
+  \hline
+2485 & Firmicutes & Bacilli & Gemellales & Gemellaceae & Gemella & 2.34 \\ 
+  25857 & Firmicutes & Bacilli & Lactobacillales & Carnobacteriaceae & Granulicatella & 1.78 \\ 
+  33170 & Actinobacteria & Actinobacteria & Actinomycetales & Micrococcaceae & Rothia & 1.76 \\ 
+  260 & Firmicutes & Bacilli & Lactobacillales & Streptococcaceae & Lactococcus & 1.66 \\ 
+  25456 & Actinobacteria & Actinobacteria & Actinomycetales & Actinomycetaceae & Actinomyces & 1.58 \\ 
+   \hline
+\end{tabular}
+\caption{Most median abundant on fingers.} 
+\end{table}
+
+
+\clearpage 
+
+For all groups, it is a *Gemella* OTU. The median abundance was used because OTU abundances can be easily skewed by outlier values (as is also the case in this dataset). So although *Lactobacillus* is the most abundant in the figure produced below, it is not the most consistently abundant when median abundance is considered.  
+
 
 
 ```r
 ph <- aggregate(taxo$abundance, by=list(taxo$phylum), FUN=sum)
-ph[rev(order(ph$x))[1:10], ] #  cut off at unidentified.
+ph[rev(order(ph$x))[1:10], ] #  cut off conveniently at unidentified.
 ```
 
 ```
@@ -687,12 +825,33 @@ text(fixx+.1, fixy, realSE, pos=4, cex=.7)
 
 Next, we want to know how communities break out between people and their phones. To do this, we make a distance matrix. In our case, we want to be able to easily explain so we use Jaccard similarity $$ S_{jaccard} = \frac{shared~richness}{combined~richness} $$ so that we can interpret in easy language. Later, we'll also want a _similarity_ rather than a _distance_, so we'll invert the distance R gives by default $$ S_{jaccard} = 1-D_{jaccard} $$. This way things with more in common have higher values, and that is easier to visualize.
 
-Note that this was tried also with the same Canberra distance that will be used later for ordinations. Results were almost identical, but Jaccard is much easier to interpret for this sort of graph, so we use Jaccard. 
+Note that this was tried also with the same Canberra distance that will be used later for ordinations. Results were almost identical, but Jaccard is much easier to interpret for this sort of graph, so we use Jaccard. Also, the Jaccard calculation in the `vegan` package is not the one we want, so I've written one that calculates the original Jaccard similarity. This takes a bit of time since it is not compiled. Thus, this is chached so that it does not have to run every time. If rerunning with slightly different data, unchache this code chunk. So it goes. 
 
 
 
 ```r
-dis <- vegdist(rw.25, 'jaccard')
+JacJFM <- function(x=rw.25) {
+  mat <- matrix(0, nrow(x), nrow(x))
+  mat.names <- dimnames(rw.25)[[1]]
+  dimnames(mat) <- list(mat.names, mat.names)
+  
+  for(i in 1:nrow(mat)) {
+    for(j in 1:ncol(mat)) {
+      iname <- row.names(x)[i]
+      jname <- row.names(x)[j]
+      if(iname != jname) {
+        ijcount <- apply(x[c(iname, jname), ]>1, 2, sum)
+        ijintersect <- length(which(ijcount == 2))
+        ijunion <- length(which(ijcount > 0))
+        ijvalue <- ijintersect/ijunion  
+        mat[iname, jname] <- ijvalue
+      }
+    }
+  }
+  invisible(as.dist(mat))
+}
+
+dis <- 1-JacJFM()
 ```
 
 
@@ -751,23 +910,23 @@ bar.jac.df
 
 ```
     in.th  in.ph  th.ph
-17 0.5714 0.7820 0.7961
-18 0.5541 0.8652 0.8010
-19 0.6559 0.7030 0.7016
-20 0.6226 0.7361 0.8058
-22 0.6230 0.8146 0.8015
-23 0.5657 0.6880 0.7537
-24 0.5057 0.7992 0.7888
-25 0.6339 0.7712 0.7596
-26 0.7345 0.7843 0.8180
-28 0.7975 0.8312 0.9639
-29 0.5661 0.7434 0.7335
-30 0.5225 0.8690 0.8777
-31 0.8115 0.8356 0.8834
-32 0.7026 0.6638 0.5900
-33 0.6053 0.7137 0.6667
-34 0.6180 0.8075 0.7802
-35 0.9066 0.8729 0.9291
+17 0.6273 0.7686 0.7886
+18 0.6580 0.8397 0.8427
+19 0.6426 0.7560 0.7911
+20 0.6873 0.8364 0.8830
+22 0.6281 0.8246 0.8279
+23 0.6564 0.6842 0.7484
+24 0.6350 0.8333 0.8149
+25 0.6558 0.7968 0.7837
+26 0.7771 0.8100 0.8278
+28 0.7844 0.7989 0.8305
+29 0.7310 0.7896 0.7959
+30 0.6292 0.8487 0.8531
+31 0.7232 0.8745 0.8597
+32 0.7627 0.6952 0.6737
+33 0.6221 0.6771 0.7073
+34 0.6540 0.7960 0.8017
+35 0.8164 0.8543 0.8525
 ```
 
 ```r
@@ -776,9 +935,9 @@ bar.jac
 
 ```
         mean      se  se.lo  se.hi
-in.th 0.6469 0.02677 0.6201 0.6736
-in.ph 0.7812 0.01575 0.7655 0.7970
-th.ph 0.7912 0.02235 0.7689 0.8136
+in.th 0.6877 0.01563 0.6721 0.7033
+in.ph 0.7932 0.01452 0.7787 0.8077
+th.ph 0.8049 0.01326 0.7916 0.8181
 ```
 
 
@@ -860,8 +1019,11 @@ All data are in place, so there is lots of futzy code to get barplots to look ni
 
 
 ```r
+
+
 # pdf('longBarplotFigure.pdf', width=8, height=4)
-ylim <- c(0,.5)
+
+ylim <- c(0,.45)
 layout(matrix(c(1,2,3), 1,3), widths=c(1, 1.6, 1.6))
 par(mar=c(4, 4.5, 2, 1), las=1, fg='gray20', lheight=1, col.axis='gray20', col.lab='gray20')
 mids <- barplot(bar.jac$mean, las=1, 
@@ -869,26 +1031,26 @@ mids <- barplot(bar.jac$mean, las=1,
 	# ylab='Percent of species in common')
   ylab='')
 mtext('Jaccard Similarity\n(as % of shared OTUs)', side=2, line=2, las=0, cex=.8)
-abline(h=c(.1,.2,.3,.4,.5), col='white', lwd=1)
+abline(h=c(.1,.2,.3,.4), col='white', lwd=1)
 mtext(c('index\n&\nthumb', 'index\n&\nphone', 'thumb\n&\nphone'), 
 	side=1, line=2.1, at=c(mids), cex=.7, col='gray20')
 axis(2, col='gray20', col.ticks='gray20', 
-	at=c(0,.1,.2,.3,.4,.5), labels=c(0,10,20,30,40,'50%'))
+	at=c(0,.1,.2,.3,.4), labels=c(0,10,20,30,'40%'))
 arrows(mids, bar.jac$se.lo, mids, bar.jac$se.hi, code=3, 
 	angle=90, length=.05, col='gray40')
 mtext('(a) All samples', font=2, col='gray20', line=.5)
 #
 par(mar=c(4, 2, 2, 1))
-mids <- barplot(bar.mf$mean, las=1, col=c('gray80', 'gray50'),
+mids <- barplot(bar.wnw$mean, las=1, col=c('gray80', 'gray50'),
 	border='transparent', axes=FALSE, ylim=ylim, yaxs='i')
-abline(h=c(.1,.2,.3,.4,.5), col='white', lwd=1)
+abline(h=c(.1,.2,.3,.4), col='white', lwd=1)
 mtext(c('index\n&\nthumb', 'index\n&\nphone', 'thumb\n&\nphone'), 
 	side=1, line=2.1, cex=.7, col='gray20',
 	at=c(mean(mids[1:2,1]), mean(mids[3:4,1]), mean(mids[5:6,1])))
-arrows(mids, bar.mf$se.lo, mids, bar.mf$se.hi, code=3, 
+arrows(mids, bar.wnw$se.lo, mids, bar.wnw$se.hi, code=3, 
 	angle=90, length=.05, col='gray20')
-mtext('(b) Male or Female?', font=2, col='gray20', line=.5)
-legend(5, .5, legend=c('m', 'f'), pch=15, col=c('gray80', 'gray50'), 
+mtext('(b) Did you wash your hands?', font=2, col='gray20', line=.5)
+legend(5, .4, legend=c('yes', 'no'), pch=15, col=c('gray80', 'gray50'), 
 	pt.cex=2, bty='n')
 par(xpd=TRUE)
 segments(c(mids[c(1,3,5), 1])-.48, rep(-.00, 3), 
@@ -897,16 +1059,16 @@ segments(c(mids[c(1,3,5), 1])-.48, rep(-.00, 3),
 par(xpd=FALSE)
 #
 par(mar=c(4, 2, 2, 1))
-mids <- barplot(bar.wnw$mean, las=1, col=c('gray80', 'gray50'),
-	border='transparent', axes=FALSE, ylim=ylim, yaxs='i')
-abline(h=c(.1,.2,.3,.4,.5), col='white', lwd=1)
+mids <- barplot(bar.mf$mean, las=1, col=c('gray80', 'gray50'),
+  border='transparent', axes=FALSE, ylim=ylim, yaxs='i')
+abline(h=c(.1,.2,.3,.4), col='white', lwd=1)
 mtext(c('index\n&\nthumb', 'index\n&\nphone', 'thumb\n&\nphone'), 
 	side=1, line=2.1, cex=.7, col='gray20',
 	at=c(mean(mids[1:2,1]), mean(mids[3:4,1]), mean(mids[5:6,1])))
-arrows(mids, bar.wnw$se.lo, mids, bar.wnw$se.hi, code=3, 
+arrows(mids, bar.mf$se.lo, mids, bar.mf$se.hi, code=3, 
 	angle=90, length=.05, col='gray20')
-mtext('(c) Did you wash your hands?', font=2, col='gray20', line=.5)
-legend(5, .5, legend=c('yes', 'no'), pch=15, col=c('gray80', 'gray50'), 
+mtext('(c) Male or Female?', font=2, col='gray20', line=.5)
+legend(5, .4, legend=c('m', 'f'), pch=15, col=c('gray80', 'gray50'), 
 	pt.cex=2, bty='n')
 par(xpd=TRUE)
 segments(c(mids[c(1,3,5), 1])-.48, rep(-.00, 3), 
@@ -918,6 +1080,8 @@ segments(c(mids[c(1,3,5), 1])-.48, rep(-.00, 3),
 
 ```r
 par(xpd=FALSE)
+#
+
 # dev.off()
 ```
 
@@ -946,13 +1110,13 @@ t.test(bar.jac.df$in.th, bar.jac.df$in.ph, paired=TRUE)
 	Paired t-test
 
 data:  bar.jac.df$in.th and bar.jac.df$in.ph
-t = 4.81, df = 16, p-value = 0.0001923
+t = 5.435, df = 16, p-value = 0.00005502
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- 0.07514 0.19355
+ 0.06434 0.14663
 sample estimates:
 mean of the differences 
-                 0.1343 
+                 0.1055 
 ```
 
 ```r
@@ -964,13 +1128,13 @@ t.test(bar.jac.df$in.th, bar.jac.df$th.ph, paired=TRUE)
 	Paired t-test
 
 data:  bar.jac.df$in.th and bar.jac.df$th.ph
-t = 5.412, df = 16, p-value = 0.00005753
+t = 6.106, df = 16, p-value = 0.00001518
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- 0.0878 0.2009
+ 0.07648 0.15785
 sample estimates:
 mean of the differences 
-                 0.1443 
+                 0.1172 
 ```
 
 
@@ -988,13 +1152,13 @@ t.test(bar.df.male.j$in.ph, bar.df.female.j$in.ph)
 	Welch Two Sample t-test
 
 data:  bar.df.male.j$in.ph and bar.df.female.j$in.ph
-t = -1.225, df = 13.34, p-value = 0.2418
+t = -1.4, df = 13.4, p-value = 0.1841
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- -0.10595  0.02915
+ -0.09125  0.01934
 sample estimates:
 mean of x mean of y 
-   0.1962    0.2346 
+   0.1857    0.2216 
 ```
 
 ```r
@@ -1006,13 +1170,13 @@ t.test(bar.df.male.j$th.ph, bar.df.female.j$th.ph)
 	Welch Two Sample t-test
 
 data:  bar.df.male.j$th.ph and bar.df.female.j$th.ph
-t = -1.07, df = 14.38, p-value = 0.3022
+t = -2.126, df = 14.07, p-value = 0.05172
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- -0.1408  0.0469
+ -0.0955972  0.0004063
 sample estimates:
 mean of x mean of y 
-   0.1812    0.2281 
+   0.1671    0.2147 
 ```
 
 
@@ -1028,13 +1192,13 @@ t.test(bar.df.wash.j$in.th, bar.df.nowash.j$in.th)
 	Welch Two Sample t-test
 
 data:  bar.df.wash.j$in.th and bar.df.nowash.j$in.th
-t = -2.238, df = 11.06, p-value = 0.04678
+t = -3.545, df = 9.838, p-value = 0.005446
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- -0.205888 -0.001764
+ -0.13398 -0.03042
 sample estimates:
 mean of x mean of y 
-   0.3043    0.4081 
+   0.2736    0.3558 
 ```
 
 ```r
@@ -1046,13 +1210,13 @@ t.test(bar.df.wash.j$in.ph, bar.df.nowash.j$in.ph)
 	Welch Two Sample t-test
 
 data:  bar.df.wash.j$in.ph and bar.df.nowash.j$in.ph
-t = -0.5067, df = 14.48, p-value = 0.62
+t = -0.2582, df = 14.97, p-value = 0.7998
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- -0.08386  0.05172
+ -0.07089  0.05558
 sample estimates:
 mean of x mean of y 
-   0.2112    0.2273 
+   0.2032    0.2109 
 ```
 
 
@@ -1099,7 +1263,7 @@ And make the plot.
 
 
 ```r
-# pdf('resemblePhone.pdf', width=2.5, height=3)
+#pdf('resemblePhone.pdf', width=2.5, height=3)
 par(mar=c(3, 4.5, 2, 1), las=1, col.axis='gray20', col.lab='gray20', fg='gray20')
 mids <- barplot(bar.others$mean, las=1, 
 	border='transparent', axes=FALSE, ylim=c(0,.3), yaxs='i', 
@@ -1119,7 +1283,7 @@ mtext('Does your phone\nresemble you?', font=2, col='gray20')
 ![plot of chunk makePersonToPhoneBarplot](figure/makePersonToPhoneBarplot.png) 
 
 ```r
-# dev.off()
+#dev.off()
 ```
 
 
@@ -1134,7 +1298,7 @@ apply(bar.others.df, 2, mean)
 
 ```
   same.in.ph others.in.ph 
-      0.2188       0.1169 
+      0.2068       0.1373 
 ```
 
 ```r
@@ -1146,13 +1310,13 @@ t.test(bar.others.df$same.in.ph, bar.others.df$others.in.ph, paired=TRUE)
 	Paired t-test
 
 data:  bar.others.df$same.in.ph and bar.others.df$others.in.ph
-t = 7.081, df = 16, p-value = 0.000002601
+t = 4.944, df = 16, p-value = 0.0001466
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- 0.07137 0.13237
+ 0.03969 0.09929
 sample estimates:
 mean of the differences 
-                 0.1019 
+                0.06949 
 ```
 
 
@@ -1245,13 +1409,13 @@ t.test(bar.others.f.df$same.in.ph, bar.others.f.df$others.in.ph, paired=TRUE)
 	Paired t-test
 
 data:  bar.others.f.df$same.in.ph and bar.others.f.df$others.in.ph
-t = 5.183, df = 9, p-value = 0.0005769
+t = 3.691, df = 9, p-value = 0.004993
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- 0.06184 0.15764
+ 0.03123 0.13017
 sample estimates:
 mean of the differences 
-                 0.1097 
+                 0.0807 
 ```
 
 ```r
@@ -1264,18 +1428,18 @@ t.test(bar.others.m.df$same.in.ph, bar.others.m.df$others.in.ph, paired=TRUE)
 	Paired t-test
 
 data:  bar.others.m.df$same.in.ph and bar.others.m.df$others.in.ph
-t = 4.886, df = 6, p-value = 0.002749
+t = 3.96, df = 6, p-value = 0.007452
 alternative hypothesis: true difference in means is not equal to 0
 95 percent confidence interval:
- 0.04524 0.13601
+ 0.02044 0.08653
 sample estimates:
 mean of the differences 
-                0.09062 
+                0.05348 
 ```
 
 
 
-Yes - both sexes share, on average, more with their own phones than with everyone else's. Men share about 9.06% percent of taxa while women share 10.97%. 
+Yes - both sexes share, on average, more with their own phones than with everyone else's. Men share about 5.35% percent more taxa with their own than with other phones, while women share 8.07% more than they share with other people's phones. 
 
 -------------------
 
@@ -1446,7 +1610,7 @@ This version uses only index fingers compared to phones.
 
 
 ```r
-# pdf('ordinationGenderIndex.pdf', height=4, width=8)
+#pdf('ordinationGenderIndex.pdf', height=4, width=8)
 
 par(mfrow=c(1,2))
 par(mar=c(2,2,2,1), las=0)
@@ -1495,21 +1659,12 @@ mtext('(b) Males', line=.2, font=2, cex=1.5, adj=0)
 ![plot of chunk genderIndexNMDS](figure/genderIndexNMDS.png) 
 
 ```r
-# dev.off()
+#dev.off()
 ```
 
 
 
 It seems clear that women and men are falling out in different parts of the ordination. And in fact the difference is highly significant for both phones and fingers - gender makes a difference.  
-
-Also, a quick function to print simple \LaTeX tables over and over.  
-
-
-```r
-pxtable <- function(tab, capt='') {
-  print(xtable(tab, caption=capt), comment=FALSE, timestamp=FALSE)#, type='html')
-  }
-```
 
 
 
@@ -1769,7 +1924,7 @@ map.finger.phone.m\$location2 & 1 & 0.57 & 0.57 & 1.34 & 0.07 & 0.0010 \\
 \clearpage
 
 
-Index fingers alone seem to explain the most variation. R$^{2}$ is higher, though the F values are slightly lower due to less statistical power. This indicates that index alone is a good finger to use in further studies. Additionally, women never show a significant difference from the communities on their phones, while men do! Perhaps women will be easier to track by their phones? 
+Index fingers alone seem to explain the most variation. R$^{2}$ is higher, though the F values are slightly lower due to less statistical power. This indicates that index alone is a good finger to use in further studies. Additionally, women don't show a significant difference from the communities on their phones, while men do! Perhaps women will be easier to track by their phones? This contrasts slightly from the results above that say that both men and women share more OTUs with their phones than other people's phones. So this indicates that whether the phone can be used to track person microbiomes will depend on how we look at the data.
 
 
 
@@ -1798,20 +1953,22 @@ ls()
  [52] "fir.se"             "fir.table"          "fir.table.10"      
  [55] "fir.taxo"           "fir.taxo.10"        "fixit"             
  [58] "fixx"               "fixy"               "font"              
- [61] "i"                  "index"              "m"                 
- [64] "makeBarDF"          "makeBarSummary"     "makeTaxo"          
- [67] "map"                "map.finger.phone.f" "map.finger.phone.m"
- [70] "map.fingers"        "map.index"          "map.index.phone.f" 
- [73] "map.index.phone.m"  "map.phones"         "map.thumb"         
- [76] "map.thumb.phone.f"  "map.thumb.phone.m"  "mids"              
- [79] "n"                  "p"                  "ph"                
- [82] "ph.mean"            "ph.se"              "pro.mean"          
- [85] "pro.se"             "pro.table"          "pro.table.10"      
- [88] "pro.taxo"           "pro.taxo.10"        "pxtable"           
- [91] "QiimeIn"            "realSE"             "rw.25"             
- [94] "rw.25.can"          "rw.25.nmds.can"     "rw.25.rel"         
- [97] "rw.taxo.25"         "se"                 "taxo"              
-[100] "test"               "thumb"              "ylim"              
+ [61] "i"                  "index"              "JacJFM"            
+ [64] "m"                  "makeBarDF"          "makeBarSummary"    
+ [67] "makeTaxo"           "map"                "map.finger.phone.f"
+ [70] "map.finger.phone.m" "map.fingers"        "map.index"         
+ [73] "map.index.phone.f"  "map.index.phone.m"  "map.phones"        
+ [76] "map.thumb"          "map.thumb.phone.f"  "map.thumb.phone.m" 
+ [79] "medAbu5"            "medAbu5.f"          "medAbu5.fing"      
+ [82] "medAbu5.m"          "medAbu5.p"          "mids"              
+ [85] "n"                  "p"                  "ph"                
+ [88] "ph.mean"            "ph.se"              "pro.mean"          
+ [91] "pro.se"             "pro.table"          "pro.table.10"      
+ [94] "pro.taxo"           "pro.taxo.10"        "pxtable"           
+ [97] "QiimeIn"            "realSE"             "rw.25"             
+[100] "rw.25.can"          "rw.25.nmds.can"     "rw.25.rel"         
+[103] "rw.taxo.25"         "se"                 "taxo"              
+[106] "test"               "thumb"              "ylim"              
 ```
 
 ```r
