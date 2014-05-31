@@ -8,4 +8,4 @@ This analysis document accompanies a manuscript that reports analysis of microbi
 
 -------------------------
 
-Currently in preparation. 
+Currently in review. 

@@ -1,6 +1,6 @@
 base
-boot
 datasets
+ggplot2
 graphics
 grDevices
 knitr
