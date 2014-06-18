@@ -8,4 +8,6 @@ This analysis document accompanies a manuscript that reports analysis of microbi
 
 -------------------------
 
-Currently in review. 
+_This study has now been published:_
+
+> Meadow JF, Altrichter AE, Green JL. 2014. Mobile phones carry the personal microbiome of their owners. PeerJ:e447; DOI 10.7717/peerj.447 

@@ -12,6 +12,11 @@
 
 _This analysis document accompanies a manuscript that reports analysis of microbial communities sampled from smartphone touchscreens, as well as the index fingers and thumbs of their owners. This was a project that was conducted as an educational workshop meant to explore innovative ways to monitor health. The manuscript is currently in review. This document was produced with the [`knitr` package](http://yihui.name/knitr/) in R, and all source code can be found on GitHub: [https://github.com/jfmeadow/Meadow_etal_Phones](https://github.com/jfmeadow/Meadow_etal_Phones)_
 
+_This study has now been published:_
+
+> Meadow JF, Altrichter AE, Green JL. 2014. Mobile phones carry the personal microbiome of their owners. PeerJ:e447; DOI 10.7717/peerj.447 
+
+
 -------------------------
 
 ### Getting data into shape
@@ -538,8 +543,6 @@ mtext('Percent of Each Sample', side=1, line=2.4, font=2)
 mtext(names(ph.mean), side=2, at=c(mids[2, ]), line=.2, font=3)
 ```
 
-![plot of chunk phylumBarplot](figure/phylumBarplot.png) 
-
 
 
 Now try to hone in on the Firmicutes since that is the most prominent difference: 
@@ -814,7 +817,7 @@ par(mar=c(5,8,2,2), las=1, font.lab=1, xpd=FALSE,
 mids <- barplot(as.matrix(act.mean), beside=TRUE, horiz=TRUE, las=1, xlim=c(0,15), 
   border='white', axisnames=FALSE, 
   col=c('gray30', 'cornflowerblue'), font.lab=2)
-abline(v=c(seq(1, 8, 1)), col='white', lwd=.5)
+abline(v=c(seq(2, 16, 2)), col='white', lwd=.5)
 arrows(unlist(c(act.mean-act.se)), unlist(c(mids)), 
      unlist(c(act.mean+act.se)), unlist(c(mids)),
   code=3, angle=90, length=.01)

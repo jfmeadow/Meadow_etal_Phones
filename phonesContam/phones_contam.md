@@ -3,7 +3,7 @@
 
 # Phone Microbiome
 
-## Contamination analysis
+## Potential Contamination analysis
 
 #### James Meadow (jfmeadow at gmail dot com)
 
@@ -13,6 +13,10 @@
 -------------------------
 
 _This document checks for the influence of potential laboratory contamination in the DNA sequence data used in [https://github.com/jfmeadow/Meadow_etal_Phones](https://github.com/jfmeadow/Meadow_etal_Phones). The initial treatment of the dataset is identical (and more thouroughly explained in the main script), but here the three different approaches to dealing with potential contamination are explored._
+
+_This study has now been published:_
+
+> Meadow JF, Altrichter AE, Green JL. 2014. Mobile phones carry the personal microbiome of their owners. PeerJ:e447; DOI 10.7717/peerj.447 
 
 -------------------------
 
